@@ -6,7 +6,7 @@
 /* =========================================================================
    Sstring_to_utf8 - Scheme String -> UTF-8 C String
    ========================================================================= */
-char* Sstring_to_utf8(ptr x) {
+char* Sstring_to_utf8(ptr x, size_t *out_len) {
     if (!Sstringp(x)) return NULL;
     
     iptr len = Sstring_length(x);
@@ -22,6 +22,9 @@ char* Sstring_to_utf8(ptr x) {
         } else if (ch < 0x800) {
             *out++ = (char)(0xC0 | (ch >> 6));
             *out++ = (char)(0x80 | (ch & 0x3F));
+        } else if (ch >= 0xD800 && ch <= 0xDFFF) {
+            // 유효하지 않은 UTF-16 서러게이트 영역 방어
+            *out++ = '?';
         } else if (ch < 0x10000) {
             *out++ = (char)(0xE0 | (ch >> 12));
             *out++ = (char)(0x80 | ((ch >> 6) & 0x3F));
@@ -36,6 +39,7 @@ char* Sstring_to_utf8(ptr x) {
         }
     }
     *out = '\0';
+    if (out_len) *out_len = (size_t)(out - buffer);
     return buffer;
 }
 
@@ -43,7 +47,7 @@ char* Sstring_to_utf8(ptr x) {
    is_alist - alist 확인
    ========================================================================= */
 int is_alist(ptr x) {
-    if (x == Snil) return 1;
+    if (!Spairp(x)) return 0;
     
     ptr curr = x;
     while (Spairp(curr)) {
@@ -60,19 +64,20 @@ int is_alist(ptr x) {
 }
 
 /* =========================================================================
-   1. DECODING: JSON -> Scheme (수정됨)
+   1. DECODING: JSON -> Scheme
    ========================================================================= */
 ptr jansson_to_scheme(json_t *element) {
   if (!element) return Snil;
 
   switch (json_typeof(element)) {
-  case JSON_NULL:    return Sstring("null");
+  case JSON_NULL:    return Sstring_to_symbol("null");
   case JSON_TRUE:    return Strue;
   case JSON_FALSE:   return Sfalse;
-  case JSON_STRING:  
-    // ✅ UTF-8 문자열을 Scheme 문자열로 변환
-    return Sstring_utf8((char *)json_string_value(element), 
-                        strlen(json_string_value(element)));
+  case JSON_STRING: {
+    const char *str = json_string_value(element);
+    size_t len = json_string_length(element);
+    return Sstring_utf8(str, (iptr)len);
+  }
   case JSON_INTEGER: return Sinteger((iptr)json_integer_value(element));
   case JSON_REAL:    return Sflonum(json_real_value(element));
 
@@ -92,8 +97,7 @@ ptr jansson_to_scheme(json_t *element) {
     const char *key;
     json_t *value;
     json_object_foreach(element, key, value) {
-      // ✅ 수정: Sstring 대신 Sstring_utf8 사용
-      ptr s_key = Sstring_utf8(key, strlen(key));
+      ptr s_key = Sstring_utf8(key, (iptr)strlen(key));
       ptr s_val = jansson_to_scheme(value);
       ptr pair = Scons(s_key, s_val);
       alist = Scons(pair, alist);
@@ -123,9 +127,10 @@ json_t *scheme_to_jansson(ptr x) {
 
   // String -> JSON String
   if (Sstringp(x)) {
-    char *c_str = Sstring_to_utf8(x);
+    size_t byte_len = 0;
+    char *c_str = Sstring_to_utf8(x, &byte_len);
     if (!c_str) return json_null();
-    json_t *j_str = json_string(c_str);
+    json_t *j_str = json_stringn(c_str, byte_len);
     free(c_str);
     return j_str;
   }
@@ -135,12 +140,16 @@ json_t *scheme_to_jansson(ptr x) {
   if (Sbignump(x)) return json_integer((json_int_t)Sinteger_value(x));
   if (Sflonump(x)) return json_real(Sflonum_value(x));
 
-  // Symbol -> JSON String
+  // Symbol -> JSON Null or JSON String
   if (Ssymbolp(x)) {
+    if (x == Sstring_to_symbol("null")) {
+      return json_null();
+    }
     ptr sym_str = Ssymbol_to_string(x);
-    char *c_str = Sstring_to_utf8(sym_str);
+    size_t byte_len = 0;
+    char *c_str = Sstring_to_utf8(sym_str, &byte_len);
     if (!c_str) return json_null();
-    json_t *j_str = json_string(c_str);
+    json_t *j_str = json_stringn(c_str, byte_len);
     free(c_str);
     return j_str;
   }
@@ -156,7 +165,7 @@ json_t *scheme_to_jansson(ptr x) {
   }
 
   // Alist -> JSON Object
-  if (Spairp(x) && is_alist(x)) {
+  if (is_alist(x)) {
     json_t *j_obj = json_object();
     ptr curr = x;
 
@@ -165,16 +174,17 @@ json_t *scheme_to_jansson(ptr x) {
       ptr key_obj = Scar(pair);
       ptr val_obj = Scdr(pair);
 
+      size_t key_len = 0;
       char *key_str = NULL;
       if (Sstringp(key_obj)) {
-        key_str = Sstring_to_utf8(key_obj);
+        key_str = Sstring_to_utf8(key_obj, &key_len);
       } else if (Ssymbolp(key_obj)) {
         ptr sym_str = Ssymbol_to_string(key_obj);
-        key_str = Sstring_to_utf8(sym_str);
+        key_str = Sstring_to_utf8(sym_str, &key_len);
       }
       
       if (key_str) {
-        json_object_set_new(j_obj, key_str, scheme_to_jansson(val_obj));
+        json_object_setn_new(j_obj, key_str, key_len, scheme_to_jansson(val_obj));
         free(key_str);
       }
       curr = Scdr(curr);
