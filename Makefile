@@ -4,10 +4,13 @@
 
 # 빌드 타겟 이름 (출력될 공유 라이브러리)
 TARGET = libchezjson.so
+JANSSON_BRIDGE_TARGET = libjansson-bridge.so
 
 # 소스 파일
 SRCS = chez_json.c
 OBJS = $(SRCS:.c=.o)
+BRIDGE_SRC = jansson_bridge.c
+BRIDGE_OBJ = $(BRIDGE_SRC:.c=.o)
 
 # 1. Linuxbrew 기본 경로 정의
 BREW_PREFIX = /home/linuxbrew/.linuxbrew
@@ -28,11 +31,14 @@ LDFLAGS = -shared -L$(BREW_PREFIX)/lib -Wl,-rpath,$(BREW_PREFIX)/lib -ljansson
 # 빌드 규칙 (Rules)
 # =========================================================================
 
-all: $(TARGET)
+all: $(TARGET) $(JANSSON_BRIDGE_TARGET)
 
 # 공유 라이브러리 링크
 $(TARGET): $(OBJS)
 	$(CC) $(OBJS) -o $(TARGET) $(LDFLAGS)
+
+$(JANSSON_BRIDGE_TARGET): $(BRIDGE_OBJ)
+	$(CC) $(BRIDGE_OBJ) -o $(JANSSON_BRIDGE_TARGET) $(LDFLAGS)
 
 # C 소스 컴파일
 %.o: %.c
@@ -40,6 +46,6 @@ $(TARGET): $(OBJS)
 
 # 정리 (Clean)
 clean:
-	rm -f $(OBJS) $(TARGET)
+	rm -f $(OBJS) $(BRIDGE_OBJ) $(TARGET) $(JANSSON_BRIDGE_TARGET)
 
 .PHONY: all clean
