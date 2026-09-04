@@ -17,6 +17,7 @@ BREW_PREFIX = /home/linuxbrew/.linuxbrew
 
 # 2. Chez Scheme 10.4.1 헤더 파일 경로
 CHEZ_INCLUDE_DIR = $(BREW_PREFIX)/Cellar/chezscheme/10.4.1/lib/csv10.4.1/ta6le
+CHEZ_INCLUDE_DIR += $(BREW_PREFIX)/include
 
 # 컴파일러 및 플래그 설정
 CC = gcc

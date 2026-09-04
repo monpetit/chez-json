@@ -1,1 +1,44 @@
-[]
+[
+  {
+    "file": "chez_json.c",
+    "arguments": [
+      "/usr/bin/gcc",
+      "-Wall",
+      "-O2",
+      "-fPIC",
+      "-I/home/linuxbrew/.linuxbrew/Cellar/chezscheme/10.4.1/lib/csv10.4.1/ta6le",
+      "-I/home/linuxbrew/.linuxbrew/include",
+      "-c",
+      "chez_json.c",
+      "-o",
+      "chez_json.o",
+      "-isystem",
+      "/home/monpetit/.wasmedge/include",
+      "-isystem",
+      "/home/monpetit/.wasmedge/include"
+    ],
+    "directory": "/home/monpetit/work/scheme/chez-json",
+    "output": "chez_json.o"
+  },
+  {
+    "file": "jansson_bridge.c",
+    "arguments": [
+      "/usr/bin/gcc",
+      "-Wall",
+      "-O2",
+      "-fPIC",
+      "-I/home/linuxbrew/.linuxbrew/Cellar/chezscheme/10.4.1/lib/csv10.4.1/ta6le",
+      "-I/home/linuxbrew/.linuxbrew/include",
+      "-c",
+      "jansson_bridge.c",
+      "-o",
+      "jansson_bridge.o",
+      "-isystem",
+      "/home/monpetit/.wasmedge/include",
+      "-isystem",
+      "/home/monpetit/.wasmedge/include"
+    ],
+    "directory": "/home/monpetit/work/scheme/chez-json",
+    "output": "jansson_bridge.o"
+  }
+]
