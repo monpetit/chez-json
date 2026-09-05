@@ -59,7 +59,7 @@
       [(_ name args result)
        (begin
          (load-shared-object "libjansson.so")
-         (load-shared-object "./libjansson-bridge.so")
+         (load-shared-object "libjansson-bridge.so")
          (foreign-procedure name args result))]))
 
   (define json-object (fp "json_object" () void*))
@@ -331,3 +331,5 @@
       (let ([result (json-dumps root json-compact)])
         (json-decref root)
         result))))
+
+;; vim: filetype=scheme :
