@@ -256,7 +256,16 @@
       [(null? value) (json-array)]
       [else (json-null)]))
 
-  (define (jansson->scheme value)
+  (define (parse-option options option)
+    (memq option options))
+
+  (define (jansson-object-key iterator key-type)
+    (let ([key (json-object-iter-key iterator)])
+      (if (eq? key-type 'string)
+          key
+          (string->symbol key))))
+
+  (define (jansson->scheme value key-type object-type)
     (cond
       [(not value) #f]
       [(json-is-null value) 'null]
@@ -271,30 +280,51 @@
          (do ([index 0 (+ index 1)])
              [(= index length) result]
            (vector-set! result index
-                        (jansson->scheme (json-array-get value index)))))]
+                        (jansson->scheme (json-array-get value index)
+                                         key-type
+                                         object-type))))]
       [(json-is-object value)
-       (let loop ([iterator (json-object-iter value)] [result '()])
-         (if (or (not iterator)
-                 (and (integer? iterator) (zero? iterator)))
-             (reverse result)
-             (loop (json-object-iter-next value iterator)
-                   (cons (cons (json-object-iter-key iterator)
-                               (jansson->scheme
-                                (json-object-iter-value iterator)))
-                         result))))]
+       (if (eq? object-type 'hash-table)
+           (let ([result (make-hashtable equal-hash equal?)])
+             (let loop ([iterator (json-object-iter value)])
+               (unless (or (not iterator)
+                           (and (integer? iterator) (zero? iterator)))
+                 (hashtable-set!
+                  result
+                  (jansson-object-key iterator key-type)
+                  (jansson->scheme (json-object-iter-value iterator)
+                                   key-type
+                                   object-type))
+                 (loop (json-object-iter-next value iterator))))
+             result)
+           (let loop ([iterator (json-object-iter value)] [result '()])
+             (if (or (not iterator)
+                     (and (integer? iterator) (zero? iterator)))
+                 (reverse result)
+                 (loop (json-object-iter-next value iterator)
+                       (cons (cons (jansson-object-key iterator key-type)
+                                   (jansson->scheme
+                                    (json-object-iter-value iterator)
+                                    key-type
+                                    object-type))
+                             result)))))]
       [else #f]))
 
-  (define (chez-json-parse input)
-    (let ([error-address (foreign-alloc (ftype-sizeof json-error-t))])
-      (let ([root (json-loads input 0 error-address)])
-        (if (and root (not (and (integer? root) (zero? root))))
-            (let ([result (jansson->scheme root)])
-              (json-decref root)
-              (foreign-free error-address)
-              result)
-            (begin
-              (foreign-free error-address)
-              #f)))))
+  (define (chez-json-parse input . options)
+    (let ([key-type (if (parse-option options 'string) 'string 'symbol)]
+          [object-type (if (parse-option options 'hash-table)
+                           'hash-table
+                           'alist)])
+      (let ([error-address (foreign-alloc (ftype-sizeof json-error-t))])
+        (let ([root (json-loads input 0 error-address)])
+          (if (and root (not (and (integer? root) (zero? root))))
+              (let ([result (jansson->scheme root key-type object-type)])
+                (json-decref root)
+                (foreign-free error-address)
+                result)
+              (begin
+                (foreign-free error-address)
+                #f))))))
 
   (define (chez-json-serialize value)
     (let ([root (scheme->jansson value)])
